@@ -134,8 +134,27 @@ func (s *dnsServer) handleRequest(conn *net.UDPConn, addr *net.UDPAddr, buf []by
 
 		response.Answer = append(response.Answer, answer)
 	} else {
-		// If no record was found, construct a not found response
-		response.SetRcode(request, dns.RcodeNameError)
+		// If no record was found, relay the query to another DNS server
+		client := new(dns.Client)
+		response, _, err := client.Exchange(request, "8.8.8.8:53") // Replace with the desired DNS server address
+		if err != nil {
+			log.Printf("Failed to relay DNS query: %v", err)
+			return
+		}
+
+		msg, err := response.Pack()
+
+		if err != nil {
+			log.Printf("Failed to pack the DNS response: %v", err)
+			return
+		}
+
+		// Send the DNS response back to the client
+		_, err = conn.WriteToUDP(msg, addr)
+		if err != nil {
+			log.Printf("Failed to send DNS response: %v", err)
+			return
+		}
 	}
 
 	// Encode the DNS response
